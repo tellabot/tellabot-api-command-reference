@@ -21,7 +21,7 @@ Parameters are passed as a **GET query string**.
 
 ## Authentication
 
-Every request requires two parameters:
+Every request requires:
 
 | Parameter | Description |
 |-----------|-------------|
@@ -34,14 +34,14 @@ Generate your API key at **Account → Profile** inside the members area. This a
 
 ## Response format
 
-All commands return a JSON object with two fields:
+All commands return a JSON object:
 
 ```json
 { "status": "ok",    "message": ... }
 { "status": "error", "message": "Error description" }
 ```
 
-When `status` is `"ok"`, `message` contains the result data (array or value).  
+When `status` is `"ok"`, `message` contains the result data.  
 When `status` is `"error"`, `message` contains a human-readable error description.
 
 ---
@@ -50,7 +50,7 @@ When `status` is `"error"`, `message` contains a human-readable error descriptio
 
 ### 1. Request an MDN
 
-Request a temporary phone number for SMS verification.
+> **Note:** each one-time MDN request can only receive a single SMS. If you need to receive another message for the same number and service, make a new request passing the `mdn` parameter to reuse the same phone number.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -59,19 +59,19 @@ Request a temporary phone number for SMS verification.
 | `api_key` | Y | Your API key |
 | `service` | Y | Service name, as returned by `list_services` or shown on **Billing → Services and Rates** |
 | `mdn` | N | Request a specific phone number. Returns an error if the number is already in use or unavailable |
-| `areacode` | N | 3-digit US area code. Takes precedence over `state`. Ignored if `mdn` is passed |
-| `state` | N | 2-letter US state abbreviation. Ignored if `mdn` or `areacode` is passed |
+| `areacode` | N | Valid 3-digit US area code. Takes precedence over `state`. Ignored if `mdn` is passed |
+| `state` | N | Valid 2-letter US state abbreviation. Ignored if `mdn` or `areacode` is passed |
 | `markup` | N | Priority bid, integer 10–2000. See [Priority requests](#priority-requests) below |
 
-**Response fields** (inside `message` array):
+**Response** — `message` array entries:
 
 | Field | Description |
 |-------|-------------|
 | `id` | Request ID |
-| `mdn` | Assigned phone number (empty if status is `Awaiting MDN`) |
+| `mdn` | Assigned phone number (empty when status is `Awaiting MDN`) |
 | `service` | Service name |
 | `status` | `Reserved` or `Awaiting MDN` |
-| `state` | State code for geo-targeted requests |
+| `state` | State for geo-targeted requests |
 | `markup` | Bid value |
 | `price` | Price |
 | `carrier` | Carrier name |
@@ -108,24 +108,15 @@ https://www.tellabot.com/api_command.php?cmd=request&user=test&api_key=012345678
 { "status": "error", "message": "No numbers available, retry later" }
 ```
 
-#### Reusing an MDN
-
-To reuse a number you previously used with a service, pass the `mdn` parameter:
-
-```
-https://www.tellabot.com/api_command.php?cmd=request&user=test&api_key=0123456789&service=Amazon&mdn=12345678901
-```
-
-Note: numbers are rotated periodically and may no longer be available.
-
 #### Priority requests
 
 Pass the `markup` parameter (10–2000) to place a priority bid when no numbers are immediately available.
 
 - The request is created with status `Awaiting MDN` and the `mdn` field is empty.
-- When a suitable number becomes available and multiple users have placed bids, it goes to the highest bidder.
+- When a suitable number becomes available and multiple users have placed bids, it goes to the highest bidder who bid earliest.
 - The status changes to `Reserved` once a number is assigned.
 - An unfulfilled priority request is automatically deleted after 15 minutes.
+- Monitor with `request_status`, or configure a [webhook URL](#webhook-url) to receive a `priority_request` event when your bid wins.
 - **Tip:** use `list_services` with a single service name to get `recommended_markup` as a starting point.
 
 ```json
@@ -147,11 +138,26 @@ Pass the `markup` parameter (10–2000) to place a priority bid when no numbers 
 }
 ```
 
-Monitor the request with `request_status`, or configure a [webhook URL](#webhook-url) to receive a `priority_request` event when your bid wins.
+#### Reusing an MDN
+
+To reuse a number previously used with a service, pass the `mdn` parameter. Keep in mind that numbers are changed periodically and may no longer be available.
+
+```
+https://www.tellabot.com/api_command.php?cmd=request&user=test&api_key=0123456789&service=Amazon&mdn=12345678901
+```
+
+**Error response:**
+```json
+{ "status": "error", "message": "The MDN is not available" }
+```
+
+---
 
 #### Requesting the same MDN for multiple services at once
 
-Pass up to 5 comma-separated service names in the `service` parameter. The system creates linked priority requests and assigns a single phone number that works for all listed services simultaneously.
+Pass up to 5 comma-separated service names in the `service` parameter to get a single phone number that works for all of them simultaneously. Priority requests are created automatically and markup is assigned to ensure you are the highest bidder for all services.
+
+> **Note:** geo targeting may greatly limit the pool of available numbers.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -159,10 +165,8 @@ Pass up to 5 comma-separated service names in the `service` parameter. The syste
 | `user` | Y | Your username or email |
 | `api_key` | Y | Your API key |
 | `service` | Y | Up to 5 service names, comma-separated |
-| `areacode` | N | 3-digit US area code |
-| `state` | N | 2-letter US state abbreviation |
-
-Markup is assigned automatically. Note: geo targeting reduces the pool of available numbers.
+| `areacode` | N | Valid 3-digit US area code. Takes precedence over `state` |
+| `state` | N | Valid 2-letter US state abbreviation. Ignored if `areacode` is passed |
 
 **Example request:**
 ```
@@ -224,15 +228,17 @@ Get the current status of a request by its ID.
 | `api_key` | Y | Your API key |
 | `id` | Y | Request ID returned by the `request` command |
 
-**Status values** (inside `message[0].status`):
+**Response** — `message` array entries contain: `id`, `mdn`, `service`, `status`, `state`, `markup`, `carrier`, `till_expiration`.
+
+**Status values:**
 
 | Value | Meaning |
 |-------|---------|
-| `Awaiting MDN` | Priority bid placed; no number assigned yet. `mdn` field is empty |
+| `Awaiting MDN` | Priority bid placed; no number assigned yet. `mdn` is empty |
 | `Reserved` | Number assigned, waiting for incoming SMS. `mdn` contains the number |
 | `Completed` | SMS received. Use `read_sms` to retrieve the message |
-| `Rejected` | Rejected by you via `reject`, or no suitable number was available |
-| `Timed Out` | No SMS arrived within the allowed time; request was automatically cancelled |
+| `Rejected` | Rejected via the `reject` command, or no suitable number was available |
+| `Timed Out` | No SMS arrived in time; request was automatically cancelled |
 
 > **Polling note:** wait at least 15 seconds between `request_status` calls.
 
@@ -315,22 +321,21 @@ https://www.tellabot.com/api_command.php?cmd=reject&user=test&api_key=0123456789
 
 ### 4. Read SMS
 
-Retrieve messages received to a phone number.
+Get messages received to a phone number. Returns up to 3 latest messages from the past 2 days, newest first.
 
-> **Note:** each one-time MDN request can only receive a single SMS. To receive another message for the same service, make a new `request` — optionally passing the same `mdn` to reuse the number.  
-> **Note:** when filtering by `id`, this command only returns a result after the request status changes to `Completed`.  
-> **Tip:** consider using a [webhook URL](#webhook-url) instead of polling.
+> **Note:** when filtering by `id`, this command only returns a result after the request status changes to `Completed`. Without the `id` filter, messages from previously completed requests may also be included.  
+> **Tip:** consider configuring a [webhook URL](#webhook-url) instead of polling.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `cmd` | Y | `"read_sms"`. Returns up to 3 latest messages from the past 2 days, newest first |
+| `cmd` | Y | `"read_sms"` |
 | `user` | Y | Your username or email |
 | `api_key` | Y | Your API key |
 | `id` | N | Filter by request ID. If passed, `mdn` and `service` are ignored |
 | `mdn` | N | Filter by phone number |
 | `service` | N | Filter by service name |
 
-**Response fields** (inside `message` array):
+**Response** — `message` array entries:
 
 | Field | Description |
 |-------|-------------|
@@ -362,6 +367,16 @@ https://www.tellabot.com/api_command.php?cmd=read_sms&user=test&api_key=01234567
       "price": 1.20,
       "reply": "G-804036 is your Google verification code.",
       "pin": "G-804036"
+    },
+    {
+      "timestamp": "1600108852",
+      "date_time": "2020-09-14 14:40:52 EDT",
+      "from": "18339020112",
+      "to": "15182193312",
+      "service": "Google",
+      "price": 1.20,
+      "reply": "G-551858 is your Google verification code.",
+      "pin": "G-551858"
     }
   ]
 }
@@ -387,7 +402,7 @@ List available services and their prices.
 | `api_key` | Y | Your API key |
 | `service` | N | One or more service names, comma-separated. If omitted, all services are listed |
 
-**Response fields** (inside `message` array):
+**Response** — `message` array entries:
 
 | Field | Description |
 |-------|-------------|
@@ -397,9 +412,9 @@ List available services and their prices.
 | `ltr_short_price` | Long-term rental price (3 days) |
 | `otp_available` | Approximate number of available one-time numbers |
 | `ltr_available` | Approximate number of available long-term numbers |
-| `recommended_markup` | Suggested priority bid value (returned only when querying a single service) |
+| `recommended_markup` | Suggested priority bid (returned only when querying a single service) |
 
-> **Note:** availability figures are approximate and not calculated in real time. Actual availability is confirmed only when you make a `request`.
+> **Note:** availability figures are approximate and not real-time. Actual availability is confirmed only when you make a `request`.
 
 **Example request:**
 ```
@@ -457,9 +472,9 @@ https://www.tellabot.com/api_command.php?cmd=balance&user=test&api_key=012345678
 
 Go to **Account → Profile** in the members area and enter your webhook URL.
 
-- Data is sent as an **HTTP POST** request to your URL.
+- Data is sent as an **HTTP POST** request.
 - Your endpoint **must return HTTP 200**. Redirects are not followed.
-- If the URL is unavailable or returns a non-200 status, the system retries 5 more times at 10-minute intervals.
+- On failure, the system retries 5 more times at 10-minute intervals.
 
 ---
 
@@ -470,7 +485,7 @@ Sent when an SMS is received to one of your numbers.
 | Field | Value |
 |-------|-------|
 | `event` | `"incoming_message"` |
-| `id` | Request ID |
+| `id` | Request ID, as obtained with the `request` command |
 | `timestamp` | UNIX timestamp |
 | `date_time` | Human-readable date/time (America/New_York) |
 | `from` | Sending number |
