@@ -412,10 +412,10 @@ Query available services along with their pricing and availability.
 |-------|-------------|
 | `name` | Service name |
 | `price` | One-time SMS price |
-| `ltr_price` | Long-term rental price (30 days) |
-| `ltr_short_price` | Long-term rental price (3 days) |
+| `ltr_price` | (deprecated) Long-term rental price (30 days) |
+| `ltr_short_price` | (deprecated) Long-term rental price (3 days) |
 | `otp_available` | Approximate number of available one-time numbers |
-| `ltr_available` | Approximate number of available long-term numbers |
+| `ltr_available` | (deprecated) Approximate number of available long-term numbers |
 | `recommended_markup` | Suggested priority bid (returned only when querying a single service) |
 
 !!! note
