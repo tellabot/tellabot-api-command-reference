@@ -1,7 +1,7 @@
 site_name: Tell A Bot API Reference
 site_description: API documentation for Tell A Bot — receive SMS online with temporary US phone numbers for SMS verification and OTP codes.
 site_url: https://tellabot.netlify.app
-repo_url: https://github.com/getsms-online/tellabot-api-command-reference
+repo_url: https://github.com/tellabot/tellabot-api-command-reference
 
 docs_dir: mkdocs_docs
 site_dir: site
